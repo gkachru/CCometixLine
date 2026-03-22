@@ -31,12 +31,18 @@ struct ApiUsageCache {
 
 // ── Shared rate limit data ────────────────────────────────────────────────────
 
+#[derive(Clone)]
 struct RateLimitData {
     five_hour_util: f64,
     five_hour_resets_at: Option<String>,
     seven_day_util: f64,
     seven_day_resets_at: Option<String>,
 }
+
+// Process-lifetime cache: computed once per statusline render, shared across
+// all Usage segments (Usage, Usage5h, Usage7d) to avoid redundant I/O.
+static RATE_LIMIT_CACHE: std::sync::OnceLock<Option<RateLimitData>> =
+    std::sync::OnceLock::new();
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -173,7 +179,17 @@ fn fetch_api_usage(api_base_url: &str, token: &str, timeout_secs: u64) -> Option
 }
 
 /// Fetch rate limit data: prefer Claude Code's rate_limits field, fallback to API.
+/// Result is cached for the process lifetime so multiple segments share one fetch.
 fn fetch_rate_limit_data(input: &InputData) -> Option<RateLimitData> {
+    if let Some(cached) = RATE_LIMIT_CACHE.get() {
+        return cached.clone();
+    }
+    let result = fetch_rate_limit_data_inner(input);
+    RATE_LIMIT_CACHE.get_or_init(|| result.clone());
+    result
+}
+
+fn fetch_rate_limit_data_inner(input: &InputData) -> Option<RateLimitData> {
     if let Some(rate_limits) = &input.rate_limits {
         let ts_to_rfc3339 = |ts: i64| {
             Utc.timestamp_opt(ts, 0)

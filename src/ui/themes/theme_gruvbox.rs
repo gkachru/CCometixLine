@@ -133,9 +133,9 @@ pub fn output_style_segment() -> SegmentConfig {
     }
 }
 
-pub fn usage_segment() -> SegmentConfig {
+fn usage_segment_base(id: SegmentId) -> SegmentConfig {
     SegmentConfig {
-        id: SegmentId::Usage,
+        id,
         enabled: false,
         icon: IconConfig {
             plain: "📊".to_string(),
@@ -161,64 +161,16 @@ pub fn usage_segment() -> SegmentConfig {
             opts
         },
     }
+}
+
+pub fn usage_segment() -> SegmentConfig {
+    usage_segment_base(SegmentId::Usage)
 }
 
 pub fn usage_5h_segment() -> SegmentConfig {
-    SegmentConfig {
-        id: SegmentId::Usage5h,
-        enabled: false,
-        icon: IconConfig {
-            plain: "📊".to_string(),
-            nerd_font: "\u{f0a9e}".to_string(),
-        },
-        colors: ColorConfig {
-            icon: Some(AnsiColor::Color16 { c16: 14 }),
-            text: Some(AnsiColor::Color16 { c16: 14 }),
-            background: None,
-        },
-        styles: TextStyleConfig::default(),
-        options: {
-            let mut opts = HashMap::new();
-            opts.insert(
-                "api_base_url".to_string(),
-                serde_json::Value::String("https://api.anthropic.com".to_string()),
-            );
-            opts.insert(
-                "cache_duration".to_string(),
-                serde_json::Value::Number(180.into()),
-            );
-            opts.insert("timeout".to_string(), serde_json::Value::Number(2.into()));
-            opts
-        },
-    }
+    usage_segment_base(SegmentId::Usage5h)
 }
 
 pub fn usage_7d_segment() -> SegmentConfig {
-    SegmentConfig {
-        id: SegmentId::Usage7d,
-        enabled: false,
-        icon: IconConfig {
-            plain: "📊".to_string(),
-            nerd_font: "\u{f0a9e}".to_string(),
-        },
-        colors: ColorConfig {
-            icon: Some(AnsiColor::Color16 { c16: 14 }),
-            text: Some(AnsiColor::Color16 { c16: 14 }),
-            background: None,
-        },
-        styles: TextStyleConfig::default(),
-        options: {
-            let mut opts = HashMap::new();
-            opts.insert(
-                "api_base_url".to_string(),
-                serde_json::Value::String("https://api.anthropic.com".to_string()),
-            );
-            opts.insert(
-                "cache_duration".to_string(),
-                serde_json::Value::Number(180.into()),
-            );
-            opts.insert("timeout".to_string(), serde_json::Value::Number(2.into()));
-            opts
-        },
-    }
+    usage_segment_base(SegmentId::Usage7d)
 }
