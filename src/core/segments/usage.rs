@@ -40,9 +40,9 @@ struct RateLimitData {
 }
 
 // Process-lifetime cache: computed once per statusline render, shared across
-// all Usage segments (Usage, Usage5h, Usage7d) to avoid redundant I/O.
-static RATE_LIMIT_CACHE: std::sync::OnceLock<Option<RateLimitData>> =
-    std::sync::OnceLock::new();
+// all Usage segments (Usage, Usage5h, Usage7d) to avoid redundant I/O. Only
+// successful fetches are cached so transient failures can be retried.
+static RATE_LIMIT_CACHE: std::sync::OnceLock<RateLimitData> = std::sync::OnceLock::new();
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -178,24 +178,25 @@ fn fetch_api_usage(api_base_url: &str, token: &str, timeout_secs: u64) -> Option
     response.into_body().read_json().ok()
 }
 
+/// Convert a Unix timestamp in seconds to an RFC3339 string. Returns None for
+/// out-of-range values. Centralizes the unit assumption for `resets_at_unix_secs`.
+fn unix_secs_to_rfc3339(ts: i64) -> Option<String> {
+    Utc.timestamp_opt(ts, 0).single().map(|dt| dt.to_rfc3339())
+}
+
 /// Fetch rate limit data: prefer Claude Code's rate_limits field, fallback to API.
-/// Result is cached for the process lifetime so multiple segments share one fetch.
+/// Successful results are cached for the process lifetime so multiple segments
+/// share one fetch; failures are not cached so later calls can retry.
 fn fetch_rate_limit_data(input: &InputData) -> Option<RateLimitData> {
     if let Some(cached) = RATE_LIMIT_CACHE.get() {
-        return cached.clone();
+        return Some(cached.clone());
     }
-    let result = fetch_rate_limit_data_inner(input);
-    RATE_LIMIT_CACHE.get_or_init(|| result.clone());
-    result
+    let result = fetch_rate_limit_data_inner(input)?;
+    Some(RATE_LIMIT_CACHE.get_or_init(|| result).clone())
 }
 
 fn fetch_rate_limit_data_inner(input: &InputData) -> Option<RateLimitData> {
     if let Some(rate_limits) = &input.rate_limits {
-        let ts_to_rfc3339 = |ts: i64| {
-            Utc.timestamp_opt(ts, 0)
-                .single()
-                .map(|dt| dt.to_rfc3339())
-        };
         return Some(RateLimitData {
             five_hour_util: rate_limits
                 .five_hour
@@ -205,8 +206,8 @@ fn fetch_rate_limit_data_inner(input: &InputData) -> Option<RateLimitData> {
             five_hour_resets_at: rate_limits
                 .five_hour
                 .as_ref()
-                .and_then(|p| p.resets_at)
-                .and_then(ts_to_rfc3339),
+                .and_then(|p| p.resets_at_unix_secs)
+                .and_then(unix_secs_to_rfc3339),
             seven_day_util: rate_limits
                 .seven_day
                 .as_ref()
@@ -215,8 +216,8 @@ fn fetch_rate_limit_data_inner(input: &InputData) -> Option<RateLimitData> {
             seven_day_resets_at: rate_limits
                 .seven_day
                 .as_ref()
-                .and_then(|p| p.resets_at)
-                .and_then(ts_to_rfc3339),
+                .and_then(|p| p.resets_at_unix_secs)
+                .and_then(unix_secs_to_rfc3339),
         });
     }
 

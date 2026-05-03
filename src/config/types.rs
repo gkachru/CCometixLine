@@ -117,7 +117,9 @@ pub struct OutputStyle {
 #[derive(Deserialize)]
 pub struct RateLimitPeriod {
     pub used_percentage: f64,
-    pub resets_at: Option<i64>, // Unix timestamp from Claude Code
+    // Unix timestamp in seconds, supplied by Claude Code.
+    #[serde(rename = "resets_at")]
+    pub resets_at_unix_secs: Option<i64>,
 }
 
 #[derive(Deserialize)]
